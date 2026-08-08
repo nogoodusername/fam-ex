@@ -25,7 +25,7 @@ Backend and frontend have separate CI pipelines gated by path (`backend/**`, `fr
 ## Current state (important)
 
 - Backend: v1 MVP REST surface is implemented — auth (email + 6-digit PIN chosen by the user at
-  signup, JWT, forgot-PIN reissue), households (create/update, invites, join, member roles — Owner/Admin/Member, with
+  signup, JWT, forgot-PIN reissue, account deletion — see "Account deletion" below), households (create/update, invites, join, member roles — Owner/Admin/Member, with
   single-holder ownership transfer, leave/remove), budgets,
   categories (with reassign-before-delete), transactions (role-scoped edit/delete, filterable by
   category/payer/type/payment mode/date range/amount range/merchant-or-category search), dashboard,
@@ -63,6 +63,28 @@ Backend and frontend have separate CI pipelines gated by path (`backend/**`, `fr
 
 Don't assume a feature exists because it's in the PRD or in a model/schema — check the actual endpoint
 router and frontend screens first.
+
+- **Account deletion (Google Play Console requirement, PRD E3):** `POST /auth/delete-account`
+  (`schemas/auth.py DeleteAccountRequest{email, pin}`) authenticates with email+PIN (via
+  `AuthService._authenticate`, the same throttled logic `login` uses) and then, in
+  `AuthService.delete_account`: (1) calls `HouseholdService.remove_user_for_account_deletion`,
+  which auto-transfers ownership to the longest-tenured Admin/Member if the user is an Owner with
+  other members, deletes the whole household if the user is its sole member (relies on
+  `Household`'s `cascade="all, delete-orphan"` relationships — see
+  `HouseholdRepository.delete`), or just removes the membership otherwise; then (2) anonymizes the
+  `User` row (tombstoned email, scrubbed name/nickname, randomized PIN hash, `is_deleted=True`,
+  `deleted_at` set) rather than hard-deleting it — `transactions.paid_by_id`/`created_by_id` and
+  `invites.invited_by_id` all `ondelete=CASCADE` to `users.id`, so an actual row delete would wipe
+  shared household transaction history other members still rely on. `users.is_deleted`/
+  `deleted_at` were added in migration `b1c2d3e4f5a6`. **The frontend surface for this is
+  deliberately not in the Compose app** (Android/iOS/Web all ship the same `commonMain` code, and
+  Play's requirement is that deletion works without the app installed) — it's a standalone static
+  page at `frontend/composeApp/src/jsMain/resources/delete-account.html`, plain HTML/CSS/JS with
+  no Compose/Kotlin build step, calling the hosted backend's REST endpoint directly via `fetch`
+  (base URL hardcoded there — keep it in sync with `HOSTED_BASE_URL` in
+  `core/network/ApiEndpoint.kt` if that ever changes). It ships as-is into the JS dist bundle
+  alongside `index.html`/`favicon.png` (see "Frontend" → jsMain below), reachable at
+  `/delete-account.html` on the deployed site.
 
 ### Known gaps (deliberately deferred, see PR discussion)
 

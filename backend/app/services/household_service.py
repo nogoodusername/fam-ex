@@ -192,3 +192,39 @@ class HouseholdService:
 
     async def get_membership_for_user(self, user_id: int) -> Optional[HouseholdMember]:
         return await self.members.get_by_user(user_id)
+
+    async def remove_user_for_account_deletion(self, user: User) -> None:
+        """Detach a deleting user from their household — called by AuthService.delete_account.
+
+        Unlike leave_household (the API path, which blocks an Owner outright), this
+        always succeeds: an Owner's role is auto-transferred to the longest-tenured
+        Admin (or, if no Admin exists, the longest-tenured Member) before their
+        membership is removed, since there's no one left to ask to transfer it
+        manually. If the Owner is the household's only member, the whole household —
+        and, via its cascading relationships, its budget/categories/transactions/
+        invites — is deleted instead of leaving an ownerless, memberless shell.
+        """
+        membership = await self.members.get_by_user(user.id)
+        if membership is None:
+            return
+
+        if membership.role != MemberRole.OWNER:
+            await self.members.delete(membership)
+            await self.households.release_member_slot(membership.household_id)
+            return
+
+        other_members = [
+            m
+            for m in await self.members.list_by_household(membership.household_id)
+            if m.id != membership.id
+        ]
+        if not other_members:
+            household = await self.get_household_or_404(membership.household_id)
+            await self.households.delete(household)
+            return
+
+        admins = [m for m in other_members if m.role == MemberRole.ADMIN]
+        successor = min(admins or other_members, key=lambda m: m.joined_at)
+        await self.members.update_role(successor, MemberRole.OWNER)
+        await self.members.delete(membership)
+        await self.households.release_member_slot(membership.household_id)

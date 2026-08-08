@@ -54,3 +54,11 @@ class HouseholdRepository:
             .where(Household.id == household_id)
             .values(member_count=Household.member_count - 1)
         )
+
+    async def delete(self, household: Household) -> None:
+        """Cascades to members/budgets/categories/transactions/invites via the ORM
+        `cascade="all, delete-orphan"` relationships on Household — see account
+        deletion's sole-member-household path in HouseholdService.
+        """
+        await self.db.delete(household)
+        await self.db.flush()

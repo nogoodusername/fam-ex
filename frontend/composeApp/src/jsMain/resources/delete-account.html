@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delete Account — BudgeYet</title>
+    <link rel="icon" type="image/png" href="favicon.png">
+    <style>
+        :root {
+            --slate-900: #0f172a;
+            --slate-700: #334155;
+            --slate-500: #64748b;
+            --slate-200: #e2e8f0;
+            --slate-50: #f8fafc;
+            --teal: #0d9488;
+            --coral: #e11d48;
+            --coral-bg: #fdecef;
+        }
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0;
+            padding: 0;
+            min-height: 100%;
+            background: var(--slate-50);
+            font-family: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            color: var(--slate-900);
+        }
+        .wrap {
+            max-width: 480px;
+            margin: 0 auto;
+            padding: 32px 20px 64px;
+        }
+        h1 {
+            font-size: 24px;
+            font-weight: 800;
+            margin: 16px 0 4px;
+        }
+        p {
+            font-size: 15px;
+            line-height: 1.5;
+            color: var(--slate-700);
+        }
+        .card {
+            background: #fff;
+            border: 1px solid var(--slate-200);
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .card h2 {
+            font-size: 15px;
+            margin: 0 0 8px;
+        }
+        .card ul {
+            margin: 0;
+            padding-left: 18px;
+            color: var(--slate-700);
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--slate-700);
+            margin: 16px 0 6px;
+        }
+        input {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid var(--slate-200);
+            border-radius: 8px;
+            font-size: 15px;
+            font-family: inherit;
+        }
+        input:focus {
+            outline: none;
+            border-color: var(--teal);
+        }
+        button {
+            width: 100%;
+            margin-top: 24px;
+            padding: 14px;
+            border: none;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 700;
+            font-family: inherit;
+            cursor: pointer;
+        }
+        #request-btn {
+            background: var(--coral);
+            color: #fff;
+        }
+        #request-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        #confirm-dialog {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.5);
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        #confirm-dialog .box {
+            background: #fff;
+            border-radius: 16px;
+            padding: 24px;
+            max-width: 360px;
+            width: 100%;
+        }
+        #confirm-dialog h3 {
+            margin: 0 0 8px;
+            font-size: 17px;
+        }
+        #confirm-dialog p {
+            font-size: 14px;
+            margin: 0 0 20px;
+        }
+        #confirm-dialog .row {
+            display: flex;
+            gap: 12px;
+        }
+        #confirm-dialog .row button {
+            margin-top: 0;
+        }
+        #cancel-btn {
+            background: var(--slate-200);
+            color: var(--slate-900);
+        }
+        .message {
+            margin-top: 16px;
+            padding: 12px 14px;
+            border-radius: 8px;
+            font-size: 14px;
+            display: none;
+        }
+        .message.error {
+            background: var(--coral-bg);
+            color: var(--coral);
+            display: block;
+        }
+        .message.success {
+            background: #ecfdf5;
+            color: var(--teal);
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <h1>Delete Your BudgeYet Account</h1>
+        <p>
+            Sign in with the email and 6-digit PIN you use in the app to permanently delete your
+            account. This does not require the app to be installed.
+        </p>
+
+        <div class="card">
+            <h2>What gets deleted</h2>
+            <ul>
+                <li>Your profile (name, nickname, email) and PIN are permanently removed.</li>
+                <li>If you're the only member of your household, the household, its budget,
+                    categories, and transactions are deleted with it.</li>
+                <li>If you share a household with others, you're removed from it and ownership
+                    transfers automatically if needed — the household and its shared transaction
+                    history remain intact for the remaining members.</li>
+            </ul>
+            <p style="margin-top: 12px; margin-bottom: 0;">
+                This action is immediate and cannot be undone.
+            </p>
+        </div>
+
+        <form id="delete-form">
+            <label for="email">Email Address</label>
+            <input id="email" type="email" autocomplete="email" required placeholder="you@example.com">
+
+            <label for="pin">6-Digit PIN</label>
+            <input id="pin" type="password" inputmode="numeric" pattern="\d{6}" maxlength="6" autocomplete="current-password" required placeholder="••••••">
+
+            <button type="submit" id="request-btn">Delete My Account</button>
+        </form>
+
+        <div id="message" class="message"></div>
+    </div>
+
+    <div id="confirm-dialog">
+        <div class="box">
+            <h3>Permanently delete your account?</h3>
+            <p>This will delete your BudgeYet account and data as described above. This cannot be undone.</p>
+            <div class="row">
+                <button id="cancel-btn">Cancel</button>
+                <button id="confirm-btn" style="background: var(--coral); color: #fff;">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Keep in sync with HOSTED_BASE_URL in
+        // composeApp/src/commonMain/kotlin/com/budgeyet/core/network/ApiEndpoint.kt
+        var API_BASE_URL = "https://budgeyet-api.imhx.top/api/v1";
+
+        var form = document.getElementById("delete-form");
+        var emailInput = document.getElementById("email");
+        var pinInput = document.getElementById("pin");
+        var requestBtn = document.getElementById("request-btn");
+        var dialog = document.getElementById("confirm-dialog");
+        var confirmBtn = document.getElementById("confirm-btn");
+        var cancelBtn = document.getElementById("cancel-btn");
+        var messageEl = document.getElementById("message");
+
+        function showMessage(text, kind) {
+            messageEl.textContent = text;
+            messageEl.className = "message " + kind;
+        }
+
+        function clearMessage() {
+            messageEl.className = "message";
+            messageEl.textContent = "";
+        }
+
+        form.addEventListener("submit", function (event) {
+            event.preventDefault();
+            clearMessage();
+            if (!/^\d{6}$/.test(pinInput.value)) {
+                showMessage("Enter your 6-digit PIN.", "error");
+                return;
+            }
+            dialog.style.display = "flex";
+        });
+
+        cancelBtn.addEventListener("click", function () {
+            dialog.style.display = "none";
+        });
+
+        confirmBtn.addEventListener("click", function () {
+            dialog.style.display = "none";
+            requestBtn.disabled = true;
+            requestBtn.textContent = "Deleting…";
+
+            fetch(API_BASE_URL + "/auth/delete-account", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: emailInput.value.trim(), pin: pinInput.value })
+            })
+                .then(function (response) {
+                    if (response.status === 204) {
+                        form.style.display = "none";
+                        showMessage("Your account and data have been deleted.", "success");
+                        return null;
+                    }
+                    return response.json().catch(function () { return {}; }).then(function (body) {
+                        throw new Error(body.detail || "Couldn't delete your account. Check your email and PIN and try again.");
+                    });
+                })
+                .catch(function (err) {
+                    showMessage(err.message || "Something went wrong. Please try again.", "error");
+                })
+                .finally(function () {
+                    requestBtn.disabled = false;
+                    requestBtn.textContent = "Delete My Account";
+                });
+        });
+    </script>
+</body>
+</html>

@@ -57,6 +57,8 @@ A collaborative, cross-platform mobile app that lets households manage shared fi
 - Category and transaction detail/edit/delete
 - Household invites via email or shareable link
 - Currency, language, and dark mode preferences
+- Account and data deletion (Google Play Console requirement), via a standalone web page rather
+  than an in-app screen — see Section 6.E3
 
 ### Out of scope (future phases — see Section 10)
 - Push notifications for member activity and budget thresholds
@@ -198,6 +200,28 @@ The household creator is the default Owner. **Owner is a single-holder role** �
 - Email shown read-only post-signup; editing is not allowed.
 - Household-level settings (Admin/Owner-editable): currency, language.
 - Personal settings: display mode (Light / Dark / System).
+
+**E3. Account deletion**
+- Required by Google Play Console's account/data deletion policy: a user must be able to request
+  deletion of their account and data via a path that doesn't require the app to be installed.
+- Delivered as a standalone web page (not a screen inside the app itself), reachable at
+  `/delete-account.html` on the hosted web deployment. The user authenticates with their email +
+  6-digit PIN — the same credential used to sign in — proving ownership without needing an
+  existing session, then confirms via a dialog before the deletion is submitted.
+- Deletion semantics (chosen to protect other household members' shared data, since transactions
+  can be logged by one member and relied on by others):
+  - The user's profile (name, nickname, email, PIN) is anonymized/scrubbed rather than the row
+    being hard-deleted, since transactions the user logged or paid for must not vanish from a
+    household other members still use.
+  - If the user is their household's only member, the household and everything in it (budget,
+    categories, transactions, invites) is deleted outright.
+  - If the user is the household's Owner and other members remain, ownership auto-transfers to
+    the longest-tenured Admin (or, absent any Admin, the longest-tenured Member) before the
+    user's membership is removed — no manual "transfer ownership first" step is required.
+  - If the user is an Admin or Member (not Owner), they're simply removed from the household;
+    other members keep the shared budget, categories, and transaction history untouched.
+- Once deleted, the account's original email and PIN no longer authenticate anything, and the
+  email becomes available for a fresh signup.
 
 ---
 

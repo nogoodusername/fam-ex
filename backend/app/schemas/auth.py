@@ -11,3 +11,7 @@ class LoginResponse(Token):
 
 class ForgotPinRequest(BaseModel):
     email: EmailStr
+
+class DeleteAccountRequest(BaseModel):
+    email: EmailStr
+    pin: str

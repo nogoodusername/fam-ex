@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.schemas.auth import ForgotPinRequest, LoginRequest, LoginResponse
+from app.schemas.auth import DeleteAccountRequest, ForgotPinRequest, LoginRequest, LoginResponse
 from app.schemas.user import UserCreate, UserResponse
 from app.services.auth_service import AuthService
 
@@ -19,3 +19,7 @@ async def login(db: AsyncSession, payload: LoginRequest, ip_address: str) -> Log
 
 async def forgot_pin(db: AsyncSession, payload: ForgotPinRequest) -> None:
     await AuthService(db).forgot_pin(payload.email)
+
+
+async def delete_account(db: AsyncSession, payload: DeleteAccountRequest, ip_address: str) -> None:
+    await AuthService(db).delete_account(payload.email, payload.pin, ip_address)

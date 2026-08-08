@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db
 from app.controllers import auth_controller
 from app.core.security import get_client_ip
-from app.schemas.auth import ForgotPinRequest, LoginRequest, LoginResponse
+from app.schemas.auth import DeleteAccountRequest, ForgotPinRequest, LoginRequest, LoginResponse
 from app.schemas.user import UserCreate, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -32,3 +32,17 @@ async def forgot_pin(payload: ForgotPinRequest, db: AsyncSession = Depends(get_d
     endpoint can't be used to enumerate accounts.
     """
     await auth_controller.forgot_pin(db, payload)
+
+
+@router.post("/delete-account", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+async def delete_account(
+    payload: DeleteAccountRequest, request: Request, db: AsyncSession = Depends(get_db)
+):
+    """Authenticate with email + PIN and permanently delete the account and its data.
+
+    Required by Google Play Console's account/data deletion policy — reachable without
+    an existing session, since the whole point is that a user can request deletion by
+    proving ownership of the account (email + PIN) rather than needing to be signed in.
+    """
+    ip_address = get_client_ip(request)
+    await auth_controller.delete_account(db, payload, ip_address)

@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +11,7 @@ from app.models.user import User
 from app.repositories.login_attempt_repository import LoginAttemptRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.user import UserCreate
+from app.services.household_service import HouseholdService
 
 
 class AuthService:
@@ -17,6 +19,7 @@ class AuthService:
         self.db = db
         self.users = UserRepository(db)
         self.login_attempts = LoginAttemptRepository(db)
+        self.households = HouseholdService(db)
 
     async def signup(self, payload: UserCreate) -> User:
         existing = await self.users.get_by_email(payload.email)
@@ -35,7 +38,12 @@ class AuthService:
         )
         return user
 
-    async def login(self, email: str, pin: str, ip_address: str) -> tuple[User, str]:
+    async def _authenticate(self, email: str, pin: str, ip_address: str) -> User:
+        """Shared by login and delete_account — both need to verify email+PIN under
+        the same per-IP/per-account throttles before doing anything else. A deleted
+        (tombstoned) account can never reach here: its email was overwritten at
+        deletion time, so a lookup by the original email simply finds nothing.
+        """
         now = datetime.utcnow()
         window_start = now - timedelta(minutes=settings.IP_LOCKOUT_WINDOW_MINUTES)
         recent_ip_failures = await self.login_attempts.count_recent_failures(
@@ -66,8 +74,33 @@ class AuthService:
         if user.failed_login_attempts or user.locked_until is not None:
             await self.users.reset_login_attempts(user)
 
+        return user
+
+    async def login(self, email: str, pin: str, ip_address: str) -> tuple[User, str]:
+        user = await self._authenticate(email, pin, ip_address)
         token = create_access_token(subject=user.id)
         return user, token
+
+    async def delete_account(self, email: str, pin: str, ip_address: str) -> None:
+        """Authenticate with email + PIN, then permanently delete the account: detach
+        it from its household (transferring ownership or deleting the household
+        outright if it's the sole member — see HouseholdService.
+        remove_user_for_account_deletion), and anonymize the user row rather than
+        hard-deleting it, since transactions.paid_by_id/created_by_id cascade-delete
+        on user removal and would otherwise wipe shared household history still
+        relied on by other members.
+        """
+        user = await self._authenticate(email, pin, ip_address)
+        await self.households.remove_user_for_account_deletion(user)
+        await self.users.update(
+            user,
+            email=f"deleted-user-{user.id}@deleted.budgeyet.invalid",
+            full_name="Deleted User",
+            nickname="Deleted",
+            pin_hash=hash_pin(secrets.token_hex(32)),
+            is_deleted=True,
+            deleted_at=datetime.utcnow(),
+        )
 
     async def forgot_pin(self, email: str) -> None:
         """Issue a fresh, server-generated PIN and email it — unlike signup, where the user
